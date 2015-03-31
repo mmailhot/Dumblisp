@@ -1,11 +1,10 @@
-import Dumblisp.Parser
-import Dumblisp.Eval
 import System.Environment
 import Control.Monad
-import Dumblisp.Types
-
+import Dumblisp.Repl
 main :: IO()
 main = do
   args <- getArgs
-  evaled <- return $ liftM show $ readExpr (args !! 0) >>= eval
-  putStrLn $ extractValue $ trapError evaled
+  case length args of
+    0 -> runRepl
+    1 -> evalAndPrint $ args !! 0
+    otherwise -> putStrLn "Program takes 0 or 1 args"
