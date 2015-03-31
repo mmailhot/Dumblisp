@@ -1,7 +1,11 @@
+{-# LANGUAGE ExistentialQuantification #-}
+
 module Dumblisp.Eval (eval) where
 
 import Dumblisp.Types
 import Control.Monad.Error
+
+data Unpacker = forall a. Eq a => AnyUnpacker (LispVal -> ThrowsError a)
 
 primitives :: [(String, [LispVal]-> ThrowsError LispVal)]
 primitives = [("+", numericBinop (+)),
@@ -31,7 +35,8 @@ primitives = [("+", numericBinop (+)),
               ("cdr", cdr),
               ("cons", cons),
               ("eq?", eqv),
-              ("eqv?", eqv)]
+              ("eqv?", eqv),
+              ("equal?", equal)]
 
 car :: [LispVal] -> ThrowsError LispVal
 car [List (x :xs)] = return x
@@ -66,6 +71,27 @@ eqv [(List arg1), (List arg2)]             = return $ Bool $ (length arg1 == len
                                 Right (Bool val) -> val
 eqv [_, _]                                 = return $ Bool False
 eqv badArgList                             = throwError $ NumArgs 2 badArgList
+
+unpackEquals :: LispVal -> LispVal -> Unpacker -> ThrowsError Bool
+unpackEquals arg1 arg2 (AnyUnpacker unpacker) =
+  do unpacked1 <- unpacker arg1
+     unpacked2 <- unpacker arg2
+     return $ unpacked1 == unpacked2
+  `catchError` (const $ return False)
+
+equal :: [LispVal] -> ThrowsError LispVal
+equal [(DottedList xs x), (DottedList ys y)] = equal [List $ xs ++ [x], List $ ys ++ [y]]
+equal [(List xs), (List ys)] = return $ Bool $ (length xs == length ys) &&
+                                               (all eqPair $ zip xs ys)
+  where eqPair (x, y) = case equal [x,y] of
+          Left err -> False
+          Right (Bool val) -> val
+equal [arg1, arg2] = do
+  primitiveEquals <- liftM or $ mapM (unpackEquals arg1 arg2)
+                     [AnyUnpacker unpackNum, AnyUnpacker unpackStr, AnyUnpacker unpackBool]
+  eqvEquals <- eqv [arg1, arg2]
+  return $ Bool $ (primitiveEquals || let (Bool x) = eqvEquals in x)
+equal badArgList = throwError $ NumArgs 2 badArgList
 
 numericBinop :: (Integer -> Integer -> Integer) -> [LispVal] -> ThrowsError LispVal
 numericBinop op []         = throwError $ NumArgs 2 []
