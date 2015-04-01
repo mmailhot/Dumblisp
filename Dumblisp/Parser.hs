@@ -33,7 +33,7 @@ parseFloat = do
   after <- many digit
   let val = before ++ "." ++ after
   return $ FNum (read val)
-  
+
 parseList :: Parser LispVal
 parseList = liftM List $ sepBy parseExpr spaces
 
