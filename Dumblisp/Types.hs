@@ -1,12 +1,17 @@
 module Dumblisp.Types (LispVal(Atom,List,DottedList,Number,FNum,String,Bool),
                        showVal,
+                       Env,
                        LispError(NumArgs,TypeMismatch,Parser,BadSpecialForm,NotFunction,UnboundVar,Default),
                        ThrowsError,
                        trapError,
-                       extractValue) where
+                       extractValue,
+                       IOThrowsError,
+                       liftThrows,
+                       runIOThrows) where
 
 import Control.Monad.Error
 import Text.ParserCombinators.Parsec hiding (spaces)
+import Data.IORef
 
 instance Show LispVal where show = showVal
 data LispVal = Atom String
@@ -30,6 +35,7 @@ showVal (DottedList head tail) = "(" ++ unwordsList head ++ " . " ++ showVal tai
 unwordsList :: [LispVal] -> String
 unwordsList = unwords . map showVal
 
+type Env = IORef [(String, IORef LispVal)]
 
 data LispError = NumArgs Integer [LispVal]
                | TypeMismatch String LispVal
@@ -58,3 +64,12 @@ type ThrowsError = Either LispError
 trapError action = catchError action (return . show)
 extractValue :: ThrowsError a -> a
 extractValue (Right val) = val
+
+type IOThrowsError = ErrorT LispError IO
+
+liftThrows :: ThrowsError a -> IOThrowsError a
+liftThrows (Left err) = throwError err
+liftThrows (Right val) = return val
+
+runIOThrows :: IOThrowsError String -> IO String
+runIOThrows action = runErrorT (trapError action) >>= return . extractValue
