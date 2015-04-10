@@ -1,4 +1,4 @@
-module Dumblisp.Parser(readExpr) where
+module Dumblisp.Parser(readExpr, readExprList) where
 
 import Dumblisp.Types
 import Text.ParserCombinators.Parsec hiding (spaces)
@@ -67,7 +67,13 @@ parseExpr = parseAtom
                 return x
 
 
-readExpr :: String -> ThrowsError LispVal
-readExpr input = case parse parseExpr "lisp" input of
+readOrThrow :: Parser a -> String -> ThrowsError a
+readOrThrow parser input = case parse parser "lisp" input of
   Left err -> throwError $ Parser err
   Right val -> return val
+
+readExpr :: String -> ThrowsError LispVal
+readExpr = readOrThrow parseExpr
+
+readExprList :: String -> ThrowsError [LispVal]
+readExprList = readOrThrow (endBy parseExpr spaces)

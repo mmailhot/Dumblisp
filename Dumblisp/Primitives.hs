@@ -1,10 +1,12 @@
 {-# LANGUAGE ExistentialQuantification #-}
 
-module Dumblisp.Primitives (primitiveBindings) where
+module Dumblisp.Primitives (primitiveBindings, load) where
 
 import Dumblisp.Types
 import Dumblisp.Env
+import Dumblisp.Parser
 import Control.Monad.Error
+import System.IO
 
 data Unpacker = forall a. Eq a => AnyUnpacker (LispVal -> ThrowsError a)
 
@@ -38,6 +40,17 @@ primitives = [("+", numericBinop (+)),
               ("eq?", eqv),
               ("eqv?", eqv),
               ("equal?", equal)]
+
+ioPrimitives :: [(String, [LispVal] -> IOThrowsError LispVal)]
+ioPrimitives = [
+                ("open-input-file", makePort ReadMode),
+                ("open-output-file", makePort WriteMode),
+                ("close-input-port", closePort),
+                ("close-output-port", closePort),
+                ("read", readProc),
+                ("write", writeProc),
+                ("read-contents", readContents),
+                ("read-all", readAll)]
 
 car :: [LispVal] -> ThrowsError LispVal
 car [List (x :xs)] = return x
@@ -136,6 +149,31 @@ checkType "string" [(String _)] = return $ Bool True
 checkType "num" [(Number _)] = return $ Bool True
 checkType _ _ = return $ Bool False
 
+makePort :: IOMode -> [LispVal] -> IOThrowsError LispVal
+makePort mode [String filename] = liftM Port $ liftIO $ openFile filename mode
+
+closePort :: [LispVal] -> IOThrowsError LispVal
+closePort [Port port] = liftIO $ hClose port >> (return $ Bool True)
+closePort _ = return $ Bool False
+
+readProc :: [LispVal] -> IOThrowsError LispVal
+readProc [] = readProc [Port stdin]
+readProc [Port port] = (liftIO $ hGetLine port) >>= liftThrows . readExpr
+
+writeProc :: [LispVal] -> IOThrowsError LispVal
+writeProc [obj] = writeProc [obj, Port stdout]
+writeProc [obj, Port port] = liftIO $ hPrint port obj >> (return $ Bool True)
+
+readContents :: [LispVal] -> IOThrowsError LispVal
+readContents [String filename] = liftM String $ liftIO $ readFile filename
+
+load :: String -> IOThrowsError [LispVal]
+load filename = (liftIO $ readFile filename) >>= liftThrows . readExprList
+
+readAll :: [LispVal] -> IOThrowsError LispVal
+readAll [String filename] = liftM List $ load filename
+
 primitiveBindings :: IO Env
-primitiveBindings = nullEnv >>= (flip bindVars $ map makePrimitiveFunc primitives)
-  where makePrimitiveFunc (var, func) = (var, PrimitiveFunc func)
+primitiveBindings = nullEnv >>= (flip bindVars $ map (makeFunc IOFunc) ioPrimitives
+                                 ++ map (makeFunc PrimitiveFunc) primitives)
+  where makeFunc constructor (var, func) = (var, constructor func)

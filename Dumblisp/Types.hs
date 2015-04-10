@@ -1,4 +1,4 @@
-module Dumblisp.Types (LispVal(Atom,List,DottedList,Number,FNum,String,Bool,PrimitiveFunc,Func,params,vararg,body,closure),
+module Dumblisp.Types (LispVal(Atom,List,DottedList,Number,FNum,String,Bool,PrimitiveFunc,Func,params,vararg,body,closure, IOFunc, Port),
                        showVal,
                        Env,
                        LispError(NumArgs,TypeMismatch,Parser,BadSpecialForm,NotFunction,UnboundVar,Default),
@@ -12,6 +12,7 @@ module Dumblisp.Types (LispVal(Atom,List,DottedList,Number,FNum,String,Bool,Prim
 import Control.Monad.Error
 import Text.ParserCombinators.Parsec hiding (spaces)
 import Data.IORef
+import System.IO
 
 instance Show LispVal where show = showVal
 data LispVal = Atom String
@@ -24,6 +25,8 @@ data LispVal = Atom String
              | PrimitiveFunc ([LispVal] -> ThrowsError LispVal)
              | Func {params :: [String], vararg :: Maybe String,
                      body :: [LispVal], closure :: Env}
+             | IOFunc ([LispVal] -> IOThrowsError LispVal)
+             | Port Handle
 
 showVal :: LispVal -> String
 showVal (String contents) = "\"" ++ contents ++ "\""
@@ -40,6 +43,8 @@ showVal (Func {params = args, vararg = varargs, body = body, closure = env}) =
   (case varargs of
       Nothing -> ""
       Just arg -> " . " ++ arg) ++ ") ...)"
+showVal (Port _) = "<IO Port>"
+showVal (IOFunc _) = "<IO primitives"
 
 unwordsList :: [LispVal] -> String
 unwordsList = unwords . map showVal

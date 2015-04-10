@@ -4,6 +4,7 @@ module Dumblisp.Eval (eval) where
 
 import Dumblisp.Types
 import Dumblisp.Env
+import Dumblisp.Primitives
 import Control.Monad.Error
 import Data.Maybe (isNothing)
 
@@ -23,6 +24,7 @@ apply (Func params varargs body closure) args =
         bindVarArgs arg env = case arg of
           Just argName -> liftIO $ bindVars env [(argName, List remainingArgs)]
           Nothing -> return env
+apply (IOFunc func) args = func args
 
 eval :: Env -> LispVal -> IOThrowsError LispVal
 eval env val@(String _) = return val
@@ -49,6 +51,12 @@ eval env (List (Atom "lambda" : DottedList params varargs : body)) =
   makeVarArgs varargs env params body
 eval env (List (Atom "lambda" : varargs@(Atom _) : body)) =
   makeVarArgs varargs env [] body
+eval env (List [Atom "apply" , func ,List args]) =
+  apply func args
+eval env (List (Atom "apply" : func : args)) =
+  apply func args
+eval env (List [Atom "load", String filename]) =
+  load filename >>= liftM last . mapM (eval env)
 eval env (List (function : args)) = do
   func <- eval env function
   argVals <- mapM (eval env) args
