@@ -1,4 +1,4 @@
-module Dumblisp.Types (LispVal(Atom,List,DottedList,Number,FNum,String,Bool),
+module Dumblisp.Types (LispVal(Atom,List,DottedList,Number,FNum,String,Bool,PrimitiveFunc,Func,params,vararg,body,closure),
                        showVal,
                        Env,
                        LispError(NumArgs,TypeMismatch,Parser,BadSpecialForm,NotFunction,UnboundVar,Default),
@@ -21,6 +21,9 @@ data LispVal = Atom String
              | FNum Float
              | String String
              | Bool Bool
+             | PrimitiveFunc ([LispVal] -> ThrowsError LispVal)
+             | Func {params :: [String], vararg :: Maybe String,
+                     body :: [LispVal], closure :: Env}
 
 showVal :: LispVal -> String
 showVal (String contents) = "\"" ++ contents ++ "\""
@@ -31,6 +34,12 @@ showVal (Bool True) = "#t"
 showVal (Bool False) = "#f"
 showVal (List contents) = "(" ++ unwordsList contents ++ ")"
 showVal (DottedList head tail) = "(" ++ unwordsList head ++ " . " ++ showVal tail ++ ")"
+showVal (PrimitiveFunc _) = "<primitive>"
+showVal (Func {params = args, vararg = varargs, body = body, closure = env}) =
+  "(lambda (" ++ unwords (map show args) ++
+  (case varargs of
+      Nothing -> ""
+      Just arg -> " . " ++ arg) ++ ") ...)"
 
 unwordsList :: [LispVal] -> String
 unwordsList = unwords . map showVal
